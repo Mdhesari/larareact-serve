@@ -1,0 +1,93 @@
+services:
+  proxy:
+    image: nginxproxy/nginx-proxy
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DHPARAM_BITS: 2048
+      DHPARAM_GENERATION: 'false'
+      HTTPS_METHOD: '${PROXY_HTTPS_REDIRECT:-redirect}'
+      HSTS: '${PROXY_HSTS:-true}'
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./docker/proxy/ssl:/etc/nginx/certs
+    networks:
+      - larareact
+
+  reactjs:
+    build:
+      context: .
+      dockerfile: ./docker/reactjs/Dockerfile
+      args:
+        - 'REACT_APP_PATH=${REACT_APP_PATH:-./service/reactapp}'
+    environment:
+      - 'VIRTUAL_HOST=${REACTJS_APP_URL:-app.local}'
+    volumes:
+      - ./docker/reactjs/nginx/conf.d:/etc/nginx/conf.d/default.conf
+    networks:
+      - larareact
+
+  frankenphp:
+    build:
+      context: .
+      dockerfile: ./docker/frankenphp/Dockerfile
+      args:
+        - 'LARAVEL_APP_PATH=${LARAVEL_APP_PATH:-./service/laravelapi}'
+    environment:
+      - 'VIRTUAL_HOST=${LARAVEL_APP_URL:-api.local}'
+    volumes:
+      - '${LARAVEL_APP_PATH:-./service/laravelapi}:/app/public'
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - larareact
+    tty: true
+
+  redis:
+    image: 'redis:alpine'
+    volumes:
+      - 'redis:/data'
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      retries: 3
+      timeout: 5s
+    networks:
+      - larareact
+
+  mariadb:
+    image: 'mariadb:10'
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-secret}'
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: '${DB_DATABASE:-larareact}'
+      MYSQL_USER: '${DB_USERNAME:-larareact}'
+      MYSQL_PASSWORD: '${DB_PASSWORD:-secret}'
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+    volumes:
+      - 'mariadb:/var/lib/mysql'
+    networks:
+      - larareact
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - '-p${DB_PASSWORD:-secret}'
+      retries: 3
+      timeout: 5s
+
+networks:
+  larareact:
+    driver: bridge
+
+volumes:
+  mariadb:
+  redis:
+  caddy_config:
+  caddy_data:

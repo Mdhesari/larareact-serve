@@ -1,0 +1,8 @@
+*.crt
+*.key
+*.pem
+*.csr
+*.ext
+*.srl
+
+# Generate local ssl certs with mkcert --key-file app.local.key --cert-file app.local.crt app.local
